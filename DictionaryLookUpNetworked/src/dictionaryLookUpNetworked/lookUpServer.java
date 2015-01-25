@@ -103,8 +103,8 @@ public class lookUpServer {
 		try {
 			br = new BufferedReader(new FileReader(dictFile));
 		}
-		catch (IOException e) {
-			e.printStackTrace();
+		catch (FileNotFoundException e1) {
+			e1.printStackTrace();
 		}
 
 		String line = "";
