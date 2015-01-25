@@ -53,22 +53,38 @@ public class lookUpServer {
 
 			DatagramSocket serverSocket = new DatagramSocket(PORT);
 			byte[] receiveData = new byte[BLOCK_SIZE];
-            byte[] sendData = new byte[BLOCK_SIZE];
             boolean serverIsRunning = true;
 
             while (serverIsRunning) {
 
                   DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
 				  serverSocket.receive(receivePacket);
-                  String word = new String( receivePacket.getData());
-                  System.out.println("RECEIVED: " + word);
+				  String word = "";
+                  word = new String(receivePacket.getData(), receivePacket.getOffset(), receivePacket.getLength());
+          		  word = word.trim();
+                  word = word.toUpperCase();
 
                   InetAddress IPAddress = receivePacket.getAddress();
                   int port = receivePacket.getPort();
 
-                  sendData = processWord(dictFile, word).getBytes();
-                  DatagramPacket sendPacket =
-                  new DatagramPacket(sendData, sendData.length, IPAddress, port);
+                  String output = processWord(dictFile, word);
+                  byte[] sendData = new byte[output.getBytes().length];
+                  sendData = output.getBytes();
+                  DatagramPacket sendPacket = null;
+                  if (sendData.length <= BLOCK_SIZE) {
+                	  sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
+                	  serverSocket.send(sendPacket);
+                  }
+                  else {
+                	  byte[][] sendDatas = chunkArray(sendData, BLOCK_SIZE);
+                	  for (int i = 0; i < sendDatas.length; i++) {
+                		  sendPacket = new DatagramPacket(sendDatas[i], sendDatas[i].length, IPAddress, port);
+                    	  serverSocket.send(sendPacket);
+                	  }
+                  }
+
+                  sendData = "|||END|||".getBytes();
+                  sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
                   serverSocket.send(sendPacket);
 
             }
@@ -81,6 +97,7 @@ public class lookUpServer {
 
 	}
 
+	@SuppressWarnings("resource")
 	public static String processWord(File dictFile, String word) {
 
 		BufferedReader br = null;
@@ -102,10 +119,14 @@ public class lookUpServer {
 
 					wordFound = true;
 					output += line;
+					output += "\n";
 					while((line = br.readLine()) != null) {
-						if (line.matches("([A-Z])*") && !line.equals(word) && !line.equals(""))
+
+						if (line.matches("([A-Z])+") && !line.equals(word) && !line.equals(""))
 							break;
 						output += line;
+						output += "\n";
+
 					}
 					if (line == null)
 						break;
@@ -113,15 +134,39 @@ public class lookUpServer {
 				}
 
 			}
-			if (!wordFound)
-				System.out.println("Word not found. Perhaps you misspelled it.");
+			if (!wordFound) {
+
+				output += word;
+			    output += " not found. Perhaps you misspelled it.\n";
+
+			}
 
 		}
 		catch (IOException e) {
 			e.printStackTrace();
 		}
+
 		return output;
 
 	}
+
+	public static byte[][] chunkArray(byte[] array, int chunkSize) {
+
+        int numOfChunks = (int)Math.ceil((double)array.length / chunkSize);
+        byte[][] output = new byte[numOfChunks][];
+ 
+        for(int i = 0; i < numOfChunks; ++i) {
+            int start = i * chunkSize;
+            int length = Math.min(array.length - start, chunkSize);
+ 
+            byte[] temp = new byte[length];
+            System.arraycopy(array, start, temp, 0, length);
+            output[i] = temp;
+
+        }
+
+        return output;
+
+    }
 
 }
