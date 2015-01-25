@@ -37,14 +37,30 @@ public class lookUpClient {
 
 			}
 
-			byte[] sendData = new byte[BLOCK_SIZE];
-			sendData = getWord().getBytes();
-			DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
-			clientSocket.send(sendPacket);
+			while (true) {
 
-			byte[] receiveData = new byte[BLOCK_SIZE];
-			DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length, IPAddress, port);
+				String word = getWord();
+				byte[] sendData = new byte[word.getBytes().length];
+				sendData = word.getBytes();
+				DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
+				clientSocket.send(sendPacket);
 
+				while (true) {
+	
+					byte[] receiveData = new byte[BLOCK_SIZE];
+					DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length, IPAddress, port);
+					clientSocket.receive(receivePacket);
+					String output = new String(receivePacket.getData(), receivePacket.getOffset(), receivePacket.getLength());
+					output = output.trim();
+					if (output.equals("|||END|||"))
+						break;
+					System.out.print(output);
+	
+				}
+				if (!userLoop())
+					break;
+
+			}
 			clientSocket.close();
 
 		}
@@ -62,6 +78,7 @@ public class lookUpClient {
         System.out.print("Enter a word: ");
 	    try {
 	        word = br.readLine();
+	        System.out.println();
 	    }
 	    catch (IOException ioe) {
 	        System.err.println("getWord() IO error trying to read word, because:" + ioe.getLocalizedMessage());
@@ -70,6 +87,28 @@ public class lookUpClient {
 
 	    word = word.toUpperCase();
 		return word;
+
+	}
+
+	public static boolean userLoop() {
+
+		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String word = null;
+
+        System.out.print("\n\nDo you wish to enter another word? [Y/n]: ");
+	    try {
+	        word = br.readLine();
+	        System.out.println();
+	    }
+	    catch (IOException ioe) {
+	        System.err.println("getWord() IO error trying to read word, because:" + ioe.getLocalizedMessage());
+	        System.exit(1);
+	    }
+
+	    word = word.toUpperCase();
+	    if (word.equals("Y") || word.contains("YES"))
+	    	return true;
+		return false;
 
 	}
 
