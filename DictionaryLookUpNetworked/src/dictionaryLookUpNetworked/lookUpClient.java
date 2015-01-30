@@ -6,10 +6,14 @@ import java.io.InputStreamReader;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.SocketTimeoutException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 public class lookUpClient {
+
+	private int ack = 0;
+	private MSG_TYPE msgNum = MSG_TYPE.WELCOME;
 
 	private class datagramObject {
 
@@ -70,51 +74,186 @@ public class lookUpClient {
 
 			}
 
+			lookUpClient luc = new lookUpClient();
+			luc.runClient(clientSocket, IPAddress, port);
+
+		}
+		catch (IOException e) {
+            e.printStackTrace();
+		}
+
+
+	}
+
+	public datagramObject receiveData(DatagramSocket clientSocket, InetAddress IPAddress, int port, int ack, MSG_TYPE msgNum, String word) throws IOException {
+
+		int numTries = 20;
+		datagramObject dataObject = null;
+    	while (numTries > 0) {
+
+      	    byte[] receiveData = new byte[BLOCK_SIZE];
+      	    DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+      	    try {
+      	    	clientSocket.setSoTimeout(500);
+      	    	clientSocket.receive(receivePacket);
+      	    }
+      	    catch (SocketTimeoutException e) {
+
+      	    	numTries--;
+      	    	continue;
+
+      	    }
+      	    dataObject = parseDatagram(receivePacket.getData());
+      	    if (dataObject != null && dataObject.msgNum == MSG_TYPE.TERMINATE.getValue())
+      	    	return dataObject;
+      	    
+      	    if (dataObject == null ||
+        	    !receivePacket.getAddress().toString().split("/")[1].equals(IPAddress.toString().split("/")[1]) ||
+        	    receivePacket.getPort() != port ||
+                ((dataObject.ack != ack ||
+                  dataObject.msgNum != msgNum.getValue()) &&
+                 receivePacket.getAddress().toString().split("/")[1].equals(IPAddress.toString().split("/")[1]) &&
+                 receivePacket.getPort() == port)) {
+
+        	    if (receivePacket.getAddress().toString().split("/")[1].equals(IPAddress.toString().split("/")[1]) &&
+             	   	receivePacket.getPort() == port)
+        	        numTries--;
+
+//      	    	System.out.println("Error in received packet");
+//      	    	System.out.println("client address: " + IPAddress.toString().split("/")[1] + " receivedAddress: " + receivePacket.getAddress().toString().split("/")[1]);
+//      	    	System.out.println("client port: " + port + " receivedPort: " + receivePacket.getPort());
+//      	    	if (dataObject == null)
+//      	    		System.out.println("Dataobject is null");
+//      	    	else {
+//      	    		System.out.println("My ack: " + ack + " Their ack: " + dataObject.ack);
+//      	    		System.out.println("My msgNum: " + msgNum.getValue() + " Their msgNum: " + dataObject.msgNum);
+//      	    	}
+        	    
+        	    if (dataObject.ack < ack) {
+
+        	    	MSG_TYPE newMsgType = MSG_TYPE.TERMINATE;
+        	    	switch (dataObject.msgNum) {
+        	    	
+        	    		case 0:
+        	    			newMsgType = MSG_TYPE.TERMINATE;
+        	    		    break;
+        	    		case 1:
+        	    			newMsgType = MSG_TYPE.READY;
+        	    		    break;
+        	    		case 2:
+        	    		case 3:
+        	    			newMsgType = MSG_TYPE.NORMAL;
+        	    		    break;
+        	    		default:
+        	    			newMsgType = MSG_TYPE.TERMINATE;
+
+        	    	}
+        	    	byte[] sendData = constructDatagram(dataObject.ack + 1, newMsgType, word);
+					DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
+					clientSocket.send(sendPacket);
+
+        	    }
+
+      	    	continue;
+
+      	    }
+      	    break;
+
+    	}
+    	if (numTries <= 0)
+    		return null;
+
+    	return dataObject;
+
+	}
+
+	public void runClient(DatagramSocket clientSocket, InetAddress IPAddress, int port) {
+
+		try {
+
 			do {
+	
+				ack = 0;
+				msgNum = MSG_TYPE.WELCOME;
 
 				clientSocket = new DatagramSocket();
 				String word = getWord();
-				lookUpClient luc = new lookUpClient();
-
-				byte[] sendData = luc.constructDatagram(0, MSG_TYPE.WELCOME, "Hi");
+	
+				byte[] sendData = constructDatagram(ack, msgNum, "Hi");
 				DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
 				clientSocket.send(sendPacket);
 
-				byte[] receiveData = new byte[BLOCK_SIZE];
-				DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length, IPAddress, port);
-				clientSocket.receive(receivePacket);
-				receiveData = receivePacket.getData();
-				datagramObject dataObject = luc.parseDatagram(receiveData);
+				msgNum = MSG_TYPE.CONFIRM;
+				int numTries = 20;
+				datagramObject dataObject = null;
+				byte[] receiveData = null;
+				DatagramPacket receivePacket = null;
+				while (numTries > 0) {
 
-				sendData = luc.constructDatagram(dataObject.ack + 1, MSG_TYPE.READY, word);
+					receiveData = new byte[BLOCK_SIZE];
+					receivePacket = new DatagramPacket(receiveData, receiveData.length, IPAddress, port);
+					try {
+		      	    	clientSocket.setSoTimeout(500);
+		      	    	clientSocket.receive(receivePacket);
+		      	    }
+		      	    catch (SocketTimeoutException e) {
+	
+		      	    	numTries--;
+		      	    	continue;
+	
+		      	    }
+					dataObject = parseDatagram(receivePacket.getData());
+					if (dataObject == null ||
+			        	!receivePacket.getAddress().toString().split("/")[1].equals(IPAddress.toString().split("/")[1]) ||
+			        	receivePacket.getPort() != port ||
+			            ((dataObject.ack != ack ||
+			              dataObject.msgNum != msgNum.getValue()) &&
+			             receivePacket.getAddress().toString().split("/")[1].equals(IPAddress.toString().split("/")[1]) &&
+			             receivePacket.getPort() == port)) {
+
+	              	    if (receivePacket.getAddress().toString().split("/")[1].equals(IPAddress.toString().split("/")[1]) &&
+	 	              	   	receivePacket.getPort() == port)
+	              	        numTries--;
+
+	              	    continue;
+
+	              	}
+	              	break;
+
+                }
+                if (numTries <= 0)
+                	continue;
+
+                ack++;
+                msgNum = MSG_TYPE.READY;
+				sendData = constructDatagram(ack, msgNum, word);
 				sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
 				clientSocket.send(sendPacket);
+				msgNum = MSG_TYPE.NORMAL;
 
 				while (true) {
 	
-					receiveData = new byte[BLOCK_SIZE];
-					receivePacket = new DatagramPacket(receiveData, receiveData.length, IPAddress, port);
-					clientSocket.receive(receivePacket);
-					receiveData = receivePacket.getData();
-					dataObject = luc.parseDatagram(receiveData);
+					dataObject = receiveData(clientSocket, IPAddress, port, ack, msgNum, word);
+					ack++;
+					if (dataObject.msgNum == MSG_TYPE.TERMINATE.getValue())
+						break;
 
-					sendData = luc.constructDatagram(dataObject.ack + 1, MSG_TYPE.NORMAL, word);
+					sendData = constructDatagram(ack, msgNum, word);
 					sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
 					clientSocket.send(sendPacket);
 
 					String output = dataObject.msg;
 					output = output.trim();
-					if (dataObject.msgNum == MSG_TYPE.TERMINATE.getValue()) {
-						sendData = luc.constructDatagram(dataObject.ack + 1, MSG_TYPE.TERMINATE, "|||END|||");
-						sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
-						clientSocket.send(sendPacket);
-						break;
-					}
 					System.out.print(output);
-	
+
 				}
 
-			clientSocket.close();
+				sendData = constructDatagram(ack, MSG_TYPE.TERMINATE, "|||END|||");
+				sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
+				clientSocket.send(sendPacket);
+	
+				clientSocket.close();
+	
 			} while (userLoop());
 
 		}
@@ -287,17 +426,21 @@ public class lookUpClient {
 	public static String getWord() {
 
 		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        String word = null;
+        String word = "";
 
-        System.out.print("Enter a word: ");
-	    try {
-	        word = br.readLine();
-	        System.out.println();
-	    }
-	    catch (IOException ioe) {
-	        System.err.println("getWord() IO error trying to read word, because:" + ioe.getLocalizedMessage());
-	        System.exit(1);
-	    }
+        do {
+
+	        System.out.print("Enter a word: ");
+		    try {
+		        word = br.readLine();
+		        System.out.println();
+		    }
+		    catch (IOException ioe) {
+		        System.err.println("getWord() IO error trying to read word, because:" + ioe.getLocalizedMessage());
+		        System.exit(1);
+		    }
+
+        } while (word.equals(""));
 
 	    word = word.toUpperCase();
 		return word;
@@ -307,17 +450,19 @@ public class lookUpClient {
 	public static boolean userLoop() {
 
 		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        String word = null;
+        String word = "";
 
-        System.out.print("\n\nDo you wish to enter another word? [Y/n]: ");
-	    try {
-	        word = br.readLine();
-	        System.out.println();
-	    }
-	    catch (IOException ioe) {
-	        System.err.println("getWord() IO error trying to read word, because:" + ioe.getLocalizedMessage());
-	        System.exit(1);
-	    }
+        do {
+	        System.out.print("\n\nDo you wish to enter another word? [Y/n]: ");
+		    try {
+		        word = br.readLine();
+		        System.out.println();
+		    }
+		    catch (IOException ioe) {
+		        System.err.println("getWord() IO error trying to read word, because:" + ioe.getLocalizedMessage());
+		        System.exit(1);
+		    }
+        } while (word.equals(""));
 
 	    word = word.toUpperCase();
 	    if (word.equals("Y") || word.contains("YES"))

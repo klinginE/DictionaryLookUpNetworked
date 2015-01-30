@@ -90,7 +90,7 @@ public class lookUpServer {
 
 	public int sendData(InetAddress IPAddress, int port, int ack, MSG_TYPE msgNum, String msg) throws IOException {
 
-		int numTries = 100;
+		int numTries = 20;
 		int currentAck = ack;
 		byte[] data = null;
     	while (numTries > 0) {
@@ -116,14 +116,14 @@ public class lookUpServer {
       	    }
       	    datagramObject dataObject = parseDatagram(receivePacket.getData());
       	    if (dataObject == null ||
-        	    !receivePacket.getAddress().toString().equals(IPAddress.toString()) ||
+        	    !receivePacket.getAddress().toString().split("/")[1].equals(IPAddress.toString().split("/")[1]) ||
         	    receivePacket.getPort() != port ||
                 ((dataObject.ack != ack ||
                   dataObject.msgNum != msgNum.getValue()) &&
-                  receivePacket.getAddress().toString().equals(IPAddress.toString()) &&
+                  receivePacket.getAddress().toString().split("/")[1].equals(IPAddress.toString().split("/")[1]) &&
                   receivePacket.getPort() == port)) {
 
-        	    if (receivePacket.getAddress() == IPAddress &&
+        	    if (receivePacket.getAddress().toString().split("/")[1].equals(IPAddress.toString().split("/")[1]) &&
              	   	receivePacket.getPort() == port)
         	        numTries--;
 
@@ -167,7 +167,7 @@ public class lookUpServer {
 
                 	InetAddress IPAddress = receivePacket.getAddress();
                     int port = receivePacket.getPort();
-                	int numTries = 100;
+                	int numTries = 20;
                 	while (numTries > 0) {
 
                 		ack = 0;
@@ -194,14 +194,14 @@ public class lookUpServer {
 	              	    }
 	              	    dataObject = parseDatagram(receivePacket.getData());
 	              	    if (dataObject == null ||
-	              	    	!receivePacket.getAddress().toString().equals(IPAddress.toString()) ||
+	              	    	!receivePacket.getAddress().toString().split("/")[1].equals(IPAddress.toString().split("/")[1]) ||
 	              	    	receivePacket.getPort() != port ||
                             ((dataObject.ack != ack ||
                               dataObject.msgNum != msgNum.getValue()) &&
-                              receivePacket.getAddress().toString().equals(IPAddress.toString()) &&
+                              receivePacket.getAddress().toString().split("/")[1].equals(IPAddress.toString().split("/")[1]) &&
                              receivePacket.getPort() == port)) {
 
-	              	    	if (receivePacket.getAddress() == IPAddress &&
+	              	    	if (receivePacket.getAddress().toString().split("/")[1].equals(IPAddress.toString().split("/")[1]) &&
 	 	              	    	receivePacket.getPort() == port)
 	              	    	    numTries--;
 
@@ -273,6 +273,10 @@ public class lookUpServer {
 
 		String line = "";
 		String output = "";
+
+		if (word.equals(""))
+			return "word not found. Perhaps you misspelled it.\n";
+
 		try {
 
 			boolean wordFound = false;
