@@ -11,8 +11,19 @@ import java.security.NoSuchAlgorithmException;
 
 public class lookUpClient {
 
+	private class datagramObject {
+
+		public int ack = 0;
+		public int hlen = 0;
+		public int len = 0;
+		public int msgNum = 0;
+		public String hash = "";
+		public String msg = "";
+
+	}
+
 	private final static int BLOCK_SIZE = 1024;
-	public enum MSG_TYPE {
+	public static enum MSG_TYPE {
 
 		WELCOME(0x00),
 		CONFIRM(0x01),
@@ -35,108 +46,109 @@ public class lookUpClient {
 
 	public static void main(String[] args) {
 
-		lookUpClient luc = new lookUpClient();
-		
-		int[] data = luc.constructDatagram(19, MSG_TYPE.TERMINATE, "Yes");
-		int ack = 0x00000000;
-		for (int i = 0; i < 2; i++) {
-			int temp = data[i];
-			temp <<= (8 * (2 - 1 - i));
-			ack |= (temp & 0x000000ff);
-		}
-		System.out.println(ack);
+		try {
 
-		int hlen = 0x00000000;
-		for (int i = 0; i < 2; i++) {
-			int temp = data[i + 2];
-			temp <<= (8 * (2 - 1 - i));
-			hlen |= (temp & 0x000000ff);
-		}
-		System.out.println(hlen);
+			DatagramSocket clientSocket = new DatagramSocket();
+			InetAddress IPAddress = InetAddress.getByName("localhost");
+			int port = 4444;
+			if (args.length > 0) {
 
-		int len = 0x00000000;
-		for (int i = 0; i < 2; i++) {
-			int temp = data[i + 4];
-			temp <<= (8 * (2 - 1 - i));
-			len |= (temp & 0x000000ff);
-		}
-		System.out.println(len);
+				if (args.length > 1) {
 
-		int msgNum = 0x00000000;
-		for (int i = 0; i < 1; i++) {
-			int temp = data[i + 6];
-			temp <<= (8 * (1 - 1 - i));
-			msgNum |= (temp & 0x000000ff);
-		}
-		System.out.println(msgNum);
+					IPAddress = InetAddress.getByName(args[0]);
+					port = Integer.parseInt(args[1]);
 
-		String hash = "";
-		for (int i = 0; i < hlen; i++) {
-			int temp = data[i + 7];
-			hash += (temp & 0x000000ff);
-		}
-		System.out.println(hash);
+				}
+				else {
 
-		String msg = "";
+					if (args[0].contains("."))
+						IPAddress = InetAddress.getByName(args[0]);
+					else
+						port = Integer.parseInt(args[0]);
+
+				}
+
+			}
+
+			do {
+
+				clientSocket = new DatagramSocket();
+				String word = getWord();
+				lookUpClient luc = new lookUpClient();
+
+				byte[] sendData = luc.constructDatagram(0, MSG_TYPE.WELCOME, "Hi");
+				DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
+				clientSocket.send(sendPacket);
+
+				byte[] receiveData = new byte[BLOCK_SIZE];
+				DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length, IPAddress, port);
+				clientSocket.receive(receivePacket);
+				receiveData = receivePacket.getData();
+				datagramObject dataObject = luc.parseDatagram(receiveData);
+
+				sendData = luc.constructDatagram(dataObject.ack + 1, MSG_TYPE.READY, word);
+				sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
+				clientSocket.send(sendPacket);
+
+				while (true) {
+	
+					receiveData = new byte[BLOCK_SIZE];
+					receivePacket = new DatagramPacket(receiveData, receiveData.length, IPAddress, port);
+					clientSocket.receive(receivePacket);
+					receiveData = receivePacket.getData();
+					dataObject = luc.parseDatagram(receiveData);
+
+					sendData = luc.constructDatagram(dataObject.ack + 1, MSG_TYPE.NORMAL, word);
+					sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
+					clientSocket.send(sendPacket);
+
+					String output = dataObject.msg;
+					output = output.trim();
+					if (dataObject.msgNum == MSG_TYPE.TERMINATE.getValue()) {
+						sendData = luc.constructDatagram(dataObject.ack + 1, MSG_TYPE.TERMINATE, "|||END|||");
+						sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
+						clientSocket.send(sendPacket);
+						break;
+					}
+					System.out.print(output);
+	
+				}
+
+			clientSocket.close();
+			} while (userLoop());
+
+		}
+		catch (IOException e) {
+            e.printStackTrace();
+		}
+
+	}
+
+	private String byteToString(int[] bytes, int len, int offset, boolean castToChar) {
+
+		String str = "";
 		for (int i = 0; i < len; i++) {
-			int temp = data[i + 7 + hlen];
-			msg += (char)(temp & 0x000000ff);
+			int temp = bytes[i + offset];
+			if (castToChar)
+				str += (char)(temp & 0x000000ff);
+			else
+				str += (temp & 0x000000ff);
 		}
-		System.out.println(msg);
-//		try {
-//
-//			DatagramSocket clientSocket = new DatagramSocket();
-//			InetAddress IPAddress = InetAddress.getByName("localhost");
-//			int port = 4444;
-//			if (args.length > 0) {
-//
-//				if (args.length > 1) {
-//
-//					IPAddress = InetAddress.getByName(args[0]);
-//					port = Integer.parseInt(args[1]);
-//
-//				}
-//				else {
-//
-//					if (args[0].contains("."))
-//						IPAddress = InetAddress.getByName(args[0]);
-//					else
-//						port = Integer.parseInt(args[0]);
-//
-//				}
-//
-//			}
-//
-//			do {
-//
-//				String word = getWord();
-//				byte[] sendData = new byte[word.getBytes().length];
-//				sendData = word.getBytes();
-//				DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
-//				clientSocket.send(sendPacket);
-//
-//				while (true) {
-//	
-//					byte[] receiveData = new byte[BLOCK_SIZE];
-//
-//					
-//					DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length, IPAddress, port);
-//					clientSocket.receive(receivePacket);
-//					String output = new String(receivePacket.getData(), receivePacket.getOffset(), receivePacket.getLength());
-//					output = output.trim();
-//					if (output.equals("|||END|||"))
-//						break;
-//					System.out.print(output);
-//	
-//				}
-//
-//			} while (userLoop());
-//			clientSocket.close();
-//
-//		}
-//		catch (IOException e) {
-//            e.printStackTrace();
-//		}
+		return str;
+
+	}
+
+	private int byteToInt(int[] bytes, int len, int offset) {
+
+		int num = 0x00000000;
+		for (int i = 0; i < len; i++) {
+
+			int temp = bytes[i + offset];
+			temp <<= (8 * (len - 1 - i));
+			num |= (temp & 0x000000ff);
+
+		}
+		return num;
 
 	}
 
@@ -152,16 +164,42 @@ public class lookUpClient {
 		return bytes;
 
 	}
-	public int[] constructDatagram(int ack, MSG_TYPE msgNum, String msg) {
 
-		int[] datagram = new int[BLOCK_SIZE];
-		for (int i = 0; i < BLOCK_SIZE; i++)
-			datagram[i] = (0x00000000);
-		int[] bytes = intToByte(ack, 2);
-		if (bytes == null)
+	public datagramObject parseDatagram(byte[] byteDatagram) {
+		
+		int[] datagram = new int[byteDatagram.length];
+		for (int i = 0; i < byteDatagram.length; i++)
+			datagram[i] = (byteDatagram[i] & 0x000000ff);
+
+		datagramObject dataObject = new datagramObject();
+		dataObject.ack = byteToInt(datagram, 2, 0);
+		//System.out.println(ack);
+
+		dataObject.hlen = byteToInt(datagram, 2, 2);
+		//System.out.println(hlen);
+
+		dataObject.len = byteToInt(datagram, 2, 4);
+		//System.out.println(len);
+
+		dataObject.msgNum = byteToInt(datagram, 1, 6);
+		//System.out.println(msgNum);
+
+		dataObject.hash = byteToString(datagram, dataObject.hlen, 7, false);
+		//System.out.println(hash);
+
+		dataObject.msg = byteToString(datagram, dataObject.len, 7 + dataObject.hlen, true);
+		//System.out.println(msg);
+
+		int[] myByteHash = hashString(dataObject.msg);
+		String myStrHash = byteToString(myByteHash, myByteHash.length, 0, false);
+		if (!myStrHash.equals(dataObject.hash))
 			return null;
-		datagram[0] = bytes[0];
-		datagram[1] = bytes[1];
+
+		return dataObject;
+
+	}
+
+	public int[] hashString(String str) {
 
 		MessageDigest md = null;
 		try {
@@ -171,41 +209,76 @@ public class lookUpClient {
 			e.printStackTrace();
 		}
 
-		md.update(msg.getBytes());
-		byte[] hash = md.digest();
-	    int hlen = hash.length;
-	    System.out.println("construct hlen: " + hlen);
+		md.update(str.getBytes());
+		byte[] byteHash = md.digest();
+		int[] intHash = new int[byteHash.length];
+		for (int i = 0; i < byteHash.length; i++)
+			intHash[i] = (byteHash[i] & 0x000000ff);
+		return intHash;
+
+	}
+
+	public byte[] constructDatagram(int ack, MSG_TYPE msgNum, String msg) {
+
+		byte[] datagram = new byte[BLOCK_SIZE];
+		for (int i = 0; i < BLOCK_SIZE; i++)
+			datagram[i] = (0x00000000);
+
+		int[] bytes = intToByte(ack, 2);
+		if (bytes == null)
+			return null;
+		datagram[0] = (byte)bytes[0];
+		datagram[1] = (byte)bytes[1];
+
+		int hlen = 32;
+		int[] hash = null;
+		String temp = "";
+		do {
+
+			if (hash != null)
+				hlen = hash.length;
+
+			int maxLength = 128 - 7 - hlen;
+			temp = "";
+			if (msg.length() > maxLength)
+				temp = msg.substring(0, maxLength - 1);
+			else
+				temp = msg;
+			hash = hashString(temp);
+
+		} while (hash.length > hlen);
+		msg = temp;
+		hlen = hash.length;
+
+	    //System.out.println("construct hlen: " + hlen);
 	    bytes = intToByte(hlen, 2);
 	    if (bytes == null)
 	    	return null;
-		datagram[2] = bytes[0];
-		datagram[3] = bytes[1];
-		
-		int maxLength = 128 - 7 - hlen;
-		if (msg.length() > maxLength)
-			msg = msg.substring(0, maxLength - 1);
+		datagram[2] = (byte)bytes[0];
+		datagram[3] = (byte)bytes[1];
+
+		assert(hlen == 32);
 
 		bytes = intToByte(msg.length(), 2);
 		if (bytes == null)
 			return null;
-		datagram[4] = bytes[0];
-		datagram[5] = bytes[1];
+		datagram[4] = (byte)bytes[0];
+		datagram[5] = (byte)bytes[1];
 
 		bytes = intToByte(msgNum.getValue(), 1);
 		if (bytes == null)
 			return null;
-		datagram[6] = bytes[0];
+		datagram[6] = (byte)bytes[0];
 
-		System.out.print("hash: ");
+		//System.out.print("hash: ");
 		for (int i = 0; i < hlen; i++) {
-			datagram[7 + i] = (hash[i] & 0x000000ff);
-			System.out.print(datagram[7 + i]);
+			datagram[7 + i] = (byte)(hash[i] & 0x000000ff);
+			//System.out.print(datagram[7 + i]);
 		}
-		System.out.println();
-		
-		byte[] messageBytes = msg.getBytes();
-		for (int i = 0; i < messageBytes.length; i++)
-			datagram[7 + hlen + i] = (messageBytes[i] & 0x000000ff);
+		//System.out.println();
+
+		for (int i = 0; i < msg.length(); i++)
+			datagram[7 + hlen + i] = (byte)(msg.charAt(i) & 0x000000ff);
 
 		return datagram;
 
