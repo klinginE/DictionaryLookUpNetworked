@@ -226,6 +226,7 @@ public class lookUpClient {
 
                 ack++;
                 msgNum = MSG_TYPE.READY;
+                //long startTime = System.currentTimeMillis();
 				sendData = constructDatagram(ack, msgNum, word);
 				sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
 				clientSocket.send(sendPacket);
@@ -247,6 +248,7 @@ public class lookUpClient {
 					System.out.print(output);
 
 				}
+				//System.out.println("Runtime: " + (System.currentTimeMillis() - startTime));
 
 				sendData = constructDatagram(ack, MSG_TYPE.TERMINATE, "|||END|||");
 				sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
